@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #F0F2F5;
+    color: #1A1A2E;
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 12px;
+    -webkit-font-smoothing: antialiased;
+  }
+  #root { width: 100%; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-[#1B3A5C] text-white px-4 rounded-md text-xs font-medium hover:bg-[#2A5580] transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 whitespace-nowrap;
+    height: 36px;
+  }
+  .btn-secondary {
+    @apply bg-white text-[#1B3A5C] border border-[#1B3A5C] px-4 rounded-md text-xs font-medium hover:bg-gray-50 transition-colors inline-flex items-center gap-2 whitespace-nowrap;
+    height: 36px;
+  }
+  .btn-danger {
+    @apply bg-[#A32D2D] text-white px-4 rounded-md text-xs font-medium hover:opacity-90 transition-colors inline-flex items-center gap-2 whitespace-nowrap;
+    height: 36px;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-[#5A6A7A] px-3 rounded-md text-xs font-medium hover:bg-gray-100 transition-colors inline-flex items-center gap-2 whitespace-nowrap;
+    height: 36px;
+  }
+  .input-field {
+    @apply bg-white border border-[#D8E2EC] rounded-md px-3 text-xs text-[#1A1A2E] w-full focus:outline-none focus:ring-2 focus:ring-[#1B3A5C]/20 focus:border-[#1B3A5C] transition-colors;
+    height: 36px;
+  }
+  .card {
+    @apply bg-white rounded-lg border border-[#D8E2EC] p-4;
+  }
+}
