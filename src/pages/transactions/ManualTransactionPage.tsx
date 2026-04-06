@@ -1,23 +1,9 @@
-import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
 import { txnApi } from '../../lib/api';
 import { PageHeader } from '../../components/shared/PageHeader';
 import { useUIStore } from '../../store/uiStore';
-
-const schema = z.object({
-  accountId: z.string().uuid('Must be a valid UUID'),
-  txnCode: z.string().min(1, 'Transaction code required'),
-  txnAmount: z.string().min(1, 'Amount required'),
-  txnCurrency: z.string().min(3).max(3),
-  narrative: z.string().optional(),
-  valueDate: z.string().optional(),
-  idempotencyKey: z.string().min(1),
-});
-type FormData = z.infer<typeof schema>;
 
 export default function ManualTransactionPage() {
   const navigate = useNavigate();
@@ -25,22 +11,40 @@ export default function ManualTransactionPage() {
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      txnCurrency: 'USD',
-      idempotencyKey: crypto.randomUUID(),
-    }
+  const [form, setForm] = useState({
+    accountId: '',
+    txnCode: '',
+    txnAmount: '',
+    txnCurrency: 'USD',
+    valueDate: '',
+    narrative: '',
+    channel: 'MANUAL',
+    createdBy: 'SYSTEM',
+    idempotencyKey: crypto.randomUUID(),
   });
 
-  const onSubmit = async (data: FormData) => {
+  const set = (field: string, value: string) => setForm(f => ({ ...f, [field]: value }));
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.accountId || !form.txnCode || !form.txnAmount) {
+      addToast('error', 'Account ID, Transaction Code and Amount are required');
+      return;
+    }
     setLoading(true);
     try {
       const res = await txnApi.post('/v1/transactions', {
-        ...data,
-        txnAmount: parseFloat(data.txnAmount),
-      }, { headers: { 'Idempotency-Key': data.idempotencyKey } });
-      setResult(res.data.data);
+        txnCode: form.txnCode,
+        accountId: form.accountId,
+        txnAmount: parseFloat(form.txnAmount),
+        txnCurrency: form.txnCurrency,
+        valueDate: form.valueDate || undefined,
+        narrative: form.narrative || undefined,
+        channel: form.channel,
+        createdBy: form.createdBy,
+        idempotencyKey: form.idempotencyKey,
+      });
+      setResult(res.data.data ?? res.data);
       addToast('success', 'Transaction posted successfully');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -68,7 +72,7 @@ export default function ManualTransactionPage() {
             ))}
           </dl>
           <div className="flex gap-2">
-            <button onClick={() => setResult(null)} className="btn-secondary">Post Another</button>
+            <button onClick={() => { setResult(null); set('idempotencyKey', crypto.randomUUID()); }} className="btn-secondary">Post Another</button>
             <button onClick={() => navigate('/transactions')} className="btn-primary">View Transactions</button>
           </div>
         </div>
@@ -81,28 +85,26 @@ export default function ManualTransactionPage() {
       <button onClick={() => navigate('/transactions')} className="btn-ghost mb-4"><ArrowLeft size={13} /> Back</button>
       <PageHeader title="Manual Transaction" subtitle="Post a manual debit or credit entry" />
       <div className="card max-w-lg">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-4">
           {[
-            { name: 'accountId', label: 'Account ID', placeholder: 'UUID of the account' },
-            { name: 'txnCode', label: 'Transaction Code', placeholder: 'e.g. CASH_DEP' },
-            { name: 'txnAmount', label: 'Amount', placeholder: '0.00' },
-            { name: 'txnCurrency', label: 'Currency', placeholder: 'USD' },
-            { name: 'valueDate', label: 'Value Date', placeholder: 'YYYY-MM-DD', type: 'date' },
-            { name: 'narrative', label: 'Narrative', placeholder: 'Optional narrative' },
-          ].map(field => (
-            <div key={field.name}>
-              <label className="block text-[10px] font-semibold text-[#5A6A7A] uppercase tracking-wide mb-1.5">
-                {field.label}
-              </label>
+            { field: 'accountId', label: 'Account ID', placeholder: 'UUID of the account' },
+            { field: 'txnCode', label: 'Transaction Code', placeholder: 'e.g. CASH_DEP' },
+            { field: 'txnAmount', label: 'Amount', placeholder: '0.00' },
+            { field: 'txnCurrency', label: 'Currency', placeholder: 'USD' },
+            { field: 'valueDate', label: 'Value Date', placeholder: 'YYYY-MM-DD', type: 'date' },
+            { field: 'narrative', label: 'Narrative', placeholder: 'Optional narrative' },
+            { field: 'channel', label: 'Channel', placeholder: 'MANUAL' },
+            { field: 'createdBy', label: 'Created By', placeholder: 'SYSTEM' },
+          ].map(({ field, label, placeholder, type }) => (
+            <div key={field}>
+              <label className="block text-[10px] font-semibold text-[#5A6A7A] uppercase tracking-wide mb-1.5">{label}</label>
               <input
-                {...register(field.name as keyof FormData)}
-                type={field.type ?? 'text'}
-                placeholder={field.placeholder}
+                type={type ?? 'text'}
+                value={form[field as keyof typeof form]}
+                onChange={e => set(field, e.target.value)}
+                placeholder={placeholder}
                 className="input-field"
               />
-              {errors[field.name as keyof FormData] && (
-                <p className="mt-1 text-[10px] text-[#A32D2D]">{errors[field.name as keyof FormData]?.message}</p>
-              )}
             </div>
           ))}
           <button type="submit" disabled={loading} className="btn-primary w-full justify-center">

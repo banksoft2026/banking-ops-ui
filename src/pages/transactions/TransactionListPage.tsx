@@ -10,21 +10,21 @@ import { formatCurrency, formatDateTime } from '../../lib/utils';
 
 export default function TransactionListPage() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
+  const [accountId, setAccountId] = useState('');
   const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', search, page],
+    queryKey: ['transactions', accountId, page],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), size: '20' });
-      if (search) params.set('search', search);
-      const res = await txnApi.get(`/v1/transactions?${params}`);
+      if (accountId) params.set('accountId', accountId);
+      const res = await txnApi.get(`/v1/transactions?${params}`).catch(() => ({ data: { data: null } }));
       return res.data.data;
     },
     retry: false,
   });
 
-  const txns: Record<string, unknown>[] = data?.content ?? [];
+  const txns: Record<string, unknown>[] = data?.content ?? (Array.isArray(data) ? data : []);
   const total = data?.totalElements ?? 0;
 
   const columns: Column<Record<string, unknown>>[] = [
@@ -49,7 +49,7 @@ export default function TransactionListPage() {
         actions={
           <div className="flex gap-2">
             <button className="btn-secondary"><Download size={13} /> Export</button>
-            <button onClick={() => navigate('/transactions/manual')} className="btn-primary">
+            <button onClick={() => navigate('/transactions/new')} className="btn-primary">
               <Plus size={13} /> Manual Entry
             </button>
           </div>
@@ -60,9 +60,9 @@ export default function TransactionListPage() {
         <div className="relative flex-1 max-w-xs">
           <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9BAB]" />
           <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Search by reference, account..."
+            value={accountId}
+            onChange={e => { setAccountId(e.target.value); setPage(0); }}
+            placeholder="Filter by Account ID..."
             className="input-field pl-8"
           />
         </div>
@@ -72,6 +72,7 @@ export default function TransactionListPage() {
         columns={columns}
         data={txns}
         isLoading={isLoading}
+        onRowClick={row => navigate(`/transactions/${row.txnId ?? row.id}`)}
         pagination={{ page, pageSize: 20, total, onPageChange: setPage }}
         emptyMessage="No transactions found"
       />

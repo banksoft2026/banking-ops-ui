@@ -5,7 +5,7 @@ import { PageHeader } from '../../components/shared/PageHeader';
 export default function InstitutionPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['institution'],
-    queryFn: () => cbsApi.get('/v1/institution').then(r => r.data.data).catch(() => null),
+    queryFn: () => cbsApi.get('/v1/config/institution').then(r => r.data.data).catch(() => null),
   });
   return (
     <div>

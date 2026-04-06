@@ -8,7 +8,7 @@ import { DataTable, type Column } from '../../components/shared/DataTable';
 import { formatCurrency, formatDate, formatDateTime } from '../../lib/utils';
 
 export default function AccountDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { accountId: id } = useParams<{ accountId: string }>();
   const navigate = useNavigate();
 
   const { data: accountData, isLoading: accountLoading } = useQuery({
@@ -27,7 +27,7 @@ export default function AccountDetailPage() {
 
   const { data: txnData, isLoading: txnLoading } = useQuery({
     queryKey: ['account-transactions', id],
-    queryFn: () => accountApi.get(`/v1/accounts/${id}/transactions?size=20`).then(r => r.data.data),
+    queryFn: () => accountApi.get(`/v1/accounts/${id}/ledger?size=20`).then(r => r.data.data).catch(() => null),
     enabled: !!id,
     retry: false,
   });

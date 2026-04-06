@@ -13,14 +13,22 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 // Accounts
 import AccountListPage from './pages/accounts/AccountListPage';
 import AccountDetailPage from './pages/accounts/AccountDetailPage';
+import OpenAccountPage from './pages/accounts/OpenAccountPage';
 
 // Customers
 import CustomerListPage from './pages/customers/CustomerListPage';
 import CustomerDetailPage from './pages/customers/CustomerDetailPage';
+import CustomerOnboardPage from './pages/customers/CustomerOnboardPage';
+
+// Entities
+import EntityListPage from './pages/entities/EntityListPage';
+import EntityDetailPage from './pages/entities/EntityDetailPage';
+import EntityOnboardPage from './pages/entities/EntityOnboardPage';
 
 // Transactions
 import TransactionListPage from './pages/transactions/TransactionListPage';
 import ManualTransactionPage from './pages/transactions/ManualTransactionPage';
+import TransactionDetailPage from './pages/transactions/TransactionDetailPage';
 
 // GL
 import ChartOfAccountsPage from './pages/gl/ChartOfAccountsPage';
@@ -33,6 +41,11 @@ import InstitutionPage from './pages/maintenance/InstitutionPage';
 import BranchPage from './pages/maintenance/BranchPage';
 import CurrencyPage from './pages/maintenance/CurrencyPage';
 import CalendarPage from './pages/maintenance/CalendarPage';
+import AccountProductsPage from './pages/maintenance/AccountProductsPage';
+import AccountProductDetailPage from './pages/maintenance/AccountProductDetailPage';
+import ChannelsPage from './pages/maintenance/ChannelsPage';
+import AuthMatrixPage from './pages/maintenance/AuthMatrixPage';
+import NumberingSchemesPage from './pages/maintenance/NumberingSchemesPage';
 
 // Reports
 import ReportsPage from './pages/reports/ReportsPage';
@@ -76,15 +89,23 @@ export default function App() {
 
             {/* Accounts */}
             <Route path="accounts" element={<AccountListPage />} />
+            <Route path="accounts/new" element={<OpenAccountPage />} />
             <Route path="accounts/:accountId" element={<AccountDetailPage />} />
 
             {/* Customers */}
             <Route path="customers" element={<CustomerListPage />} />
+            <Route path="customers/new" element={<CustomerOnboardPage />} />
             <Route path="customers/:customerId" element={<CustomerDetailPage />} />
+
+            {/* Entities */}
+            <Route path="entities" element={<EntityListPage />} />
+            <Route path="entities/new" element={<EntityOnboardPage />} />
+            <Route path="entities/:entityId" element={<EntityDetailPage />} />
 
             {/* Transactions */}
             <Route path="transactions" element={<TransactionListPage />} />
             <Route path="transactions/new" element={<ManualTransactionPage />} />
+            <Route path="transactions/:txnId" element={<TransactionDetailPage />} />
 
             {/* GL */}
             <Route path="gl/chart-of-accounts" element={<ChartOfAccountsPage />} />
@@ -97,6 +118,11 @@ export default function App() {
             <Route path="maintenance/branches" element={<BranchPage />} />
             <Route path="maintenance/currencies" element={<CurrencyPage />} />
             <Route path="maintenance/calendar" element={<CalendarPage />} />
+            <Route path="maintenance/products" element={<AccountProductsPage />} />
+            <Route path="maintenance/products/:productId" element={<AccountProductDetailPage />} />
+            <Route path="maintenance/channels" element={<ChannelsPage />} />
+            <Route path="maintenance/auth-matrix" element={<AuthMatrixPage />} />
+            <Route path="maintenance/numbering" element={<NumberingSchemesPage />} />
 
             {/* Reports */}
             <Route path="reports" element={<ReportsPage />} />

@@ -7,7 +7,7 @@ import { StatusBadge } from '../../components/shared/StatusBadge';
 export default function BranchPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['branches'],
-    queryFn: () => cbsApi.get('/v1/branches').then(r => r.data.data).catch(() => ({ content: [] })),
+    queryFn: () => cbsApi.get('/v1/config/branches?institutionId=INST-001').then(r => r.data.data).catch(() => []),
   });
 
   const branches: Record<string, unknown>[] = data?.content ?? (Array.isArray(data) ? data : []);

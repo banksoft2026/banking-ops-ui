@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+export const DEFAULT_INSTITUTION_ID = 'INST-001';
+
 const API_BASES = {
   userAdmin: 'http://localhost:8084',
   cbsMaintenance: 'http://localhost:8080',

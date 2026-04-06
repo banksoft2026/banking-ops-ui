@@ -7,7 +7,7 @@ import { StatusBadge } from '../../components/shared/StatusBadge';
 export default function CurrencyPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['currencies'],
-    queryFn: () => cbsApi.get('/v1/currencies').then(r => r.data.data).catch(() => ({ content: [] })),
+    queryFn: () => cbsApi.get('/v1/config/currencies?institutionId=INST-001').then(r => r.data.data).catch(() => []),
   });
 
   const currencies: Record<string, unknown>[] = data?.content ?? (Array.isArray(data) ? data : []);
