@@ -31,6 +31,8 @@ instances.forEach(instance => {
       if (error.response?.status === 401) {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
+        // Clear Zustand auth-storage so RouteGuard redirects properly
+        localStorage.removeItem('auth-storage');
         window.location.href = '/login';
       }
       return Promise.reject(error);
