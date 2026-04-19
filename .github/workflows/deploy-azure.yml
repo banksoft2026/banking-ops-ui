@@ -1,0 +1,104 @@
+name: Deploy to Azure Container Apps
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'prod'
+        type: choice
+        options: [dev, staging, prod]
+
+env:
+  APP_NAME: banking-ops
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'prod' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # ── Resolve deployment variables ────────────────────────────────────────
+      - name: Set deployment variables
+        id: vars
+        run: |
+          ENV="${{ github.event.inputs.environment || 'prod' }}"
+          IMAGE_TAG="${{ github.sha }}"
+          # ACR names must be alphanumeric only
+          ACR_NAME="$(echo "${APP_NAME}${ENV}acr" | tr -d '-')"
+
+          echo "ENV=${ENV}"             >> "$GITHUB_OUTPUT"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "ACR_NAME=${ACR_NAME}"   >> "$GITHUB_OUTPUT"
+
+      # ── Provision Resource Group ─────────────────────────────────────────────
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --location "${{ secrets.AZURE_LOCATION }}" \
+            --output none
+
+      # ── Deploy ACR (idempotent) ──────────────────────────────────────────────
+      - name: Deploy Container Registry
+        run: |
+          az deployment group create \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/acr.bicep \
+            --parameters \
+                appName="${{ env.APP_NAME }}" \
+                environment="${{ steps.vars.outputs.ENV }}" \
+            --output none
+
+      # ── Build & push Docker image ────────────────────────────────────────────
+      - name: Login to ACR
+        run: az acr login --name "${{ steps.vars.outputs.ACR_NAME }}"
+
+      - name: Build and push image
+        run: |
+          ACR_SERVER="${{ steps.vars.outputs.ACR_NAME }}.azurecr.io"
+          IMAGE="${ACR_SERVER}/${{ env.APP_NAME }}-ui"
+          TAG="${{ steps.vars.outputs.IMAGE_TAG }}"
+
+          docker build -t "${IMAGE}:${TAG}" .
+          docker push "${IMAGE}:${TAG}"
+
+          # Keep 'latest' pointing to the most recent build
+          docker tag "${IMAGE}:${TAG}" "${IMAGE}:latest"
+          docker push "${IMAGE}:latest"
+
+      # ── Deploy Container Apps infrastructure ─────────────────────────────────
+      - name: Deploy Azure infrastructure
+        id: deploy
+        run: |
+          URL=$(az deployment group create \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/main.bicep \
+            --parameters \
+                appName="${{ env.APP_NAME }}" \
+                environment="${{ steps.vars.outputs.ENV }}" \
+                imageTag="${{ steps.vars.outputs.IMAGE_TAG }}" \
+                acrName="${{ steps.vars.outputs.ACR_NAME }}" \
+                userAdminUrl="${{ secrets.USER_ADMIN_URL }}" \
+                cbsMaintenanceUrl="${{ secrets.CBS_MAINTENANCE_URL }}" \
+                accountMasterUrl="${{ secrets.ACCOUNT_MASTER_URL }}" \
+                txnPostingUrl="${{ secrets.TXN_POSTING_URL }}" \
+                customerEntityUrl="${{ secrets.CUSTOMER_ENTITY_URL }}" \
+            --query "properties.outputs.containerAppUrl.value" \
+            --output tsv)
+          echo "app_url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Print deployment URL
+        run: echo "Deployed to ${{ steps.deploy.outputs.app_url }}"
