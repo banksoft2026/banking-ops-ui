@@ -2,12 +2,16 @@ import axios from 'axios';
 
 export const DEFAULT_INSTITUTION_ID = 'INST-001';
 
+// Runtime config is written to /config.js by docker-entrypoint.sh at container
+// start-up so the same image works across all environments without a rebuild.
+const rc = (window as Record<string, unknown>).__RUNTIME_CONFIG__ as Record<string, string> | undefined ?? {};
+
 const API_BASES = {
-  userAdmin: 'http://localhost:8084',
-  cbsMaintenance: 'http://localhost:8080',
-  accountMaster: 'http://localhost:8082',
-  txnPosting: 'http://localhost:8083',
-  customerEntity: 'http://localhost:8081',
+  userAdmin:      rc.USER_ADMIN_URL      ?? 'http://localhost:8084',
+  cbsMaintenance: rc.CBS_MAINTENANCE_URL ?? 'http://localhost:8080',
+  accountMaster:  rc.ACCOUNT_MASTER_URL  ?? 'http://localhost:8082',
+  txnPosting:     rc.TXN_POSTING_URL     ?? 'http://localhost:8083',
+  customerEntity: rc.CUSTOMER_ENTITY_URL ?? 'http://localhost:8081',
 };
 
 export const userAdminApi = axios.create({ baseURL: API_BASES.userAdmin });

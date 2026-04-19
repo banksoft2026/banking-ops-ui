@@ -1,0 +1,103 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'prod'
+        type: choice
+        options: [dev, staging, prod]
+
+env:
+  APP_NAME: banking-ops
+  NODE_VERSION: '20'
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'prod' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Build the React app ─────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies and build
+        run: |
+          npm ci
+          npm run build
+
+      # ── Provision Azure infrastructure ──────────────────────────────────────
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set deployment variables
+        id: vars
+        run: |
+          ENV="${{ github.event.inputs.environment || 'prod' }}"
+          echo "ENV=${ENV}"                                          >> "$GITHUB_OUTPUT"
+          echo "APP_SERVICE_NAME=${{ env.APP_NAME }}-${ENV}-ui"    >> "$GITHUB_OUTPUT"
+
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name     "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --location "${{ secrets.AZURE_LOCATION }}" \
+            --output none
+
+      - name: Deploy Azure infrastructure (Bicep)
+        run: |
+          az deployment group create \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --template-file  infra/main.bicep \
+            --parameters \
+                appName="${{ env.APP_NAME }}" \
+                environment="${{ steps.vars.outputs.ENV }}" \
+                userAdminUrl="${{ secrets.USER_ADMIN_URL }}" \
+                cbsMaintenanceUrl="${{ secrets.CBS_MAINTENANCE_URL }}" \
+                accountMasterUrl="${{ secrets.ACCOUNT_MASTER_URL }}" \
+                txnPostingUrl="${{ secrets.TXN_POSTING_URL }}" \
+                customerEntityUrl="${{ secrets.CUSTOMER_ENTITY_URL }}" \
+            --output none
+
+      # ── Package and deploy ──────────────────────────────────────────────────
+      - name: Create deployment package
+        run: |
+          mkdir -p deployment
+          # Copy the React build output and the Node server
+          cp -r dist      deployment/
+          cp server.js    deployment/
+          cp package.json deployment/
+          cp package-lock.json deployment/
+          # Install only production dependencies inside the package
+          cd deployment && npm ci --omit=dev
+          # Zip from inside so files sit at the archive root (not under deployment/)
+          zip -r ../app.zip .
+
+      - name: Deploy to App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ steps.vars.outputs.APP_SERVICE_NAME }}
+          package: app.zip
+
+      - name: Print deployment URL
+        run: |
+          URL=$(az webapp show \
+            --name            "${{ steps.vars.outputs.APP_SERVICE_NAME }}" \
+            --resource-group  "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --query           "defaultHostName" \
+            --output tsv)
+          echo "Deployed to: https://$URL"
