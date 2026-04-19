@@ -1,4 +1,4 @@
-name: Deploy to Azure Container Apps
+name: Deploy to Azure App Service
 
 on:
   push:
@@ -14,6 +14,7 @@ on:
 
 env:
   APP_NAME: banking-ops
+  NODE_VERSION: '20'
 
 jobs:
   deploy:
@@ -25,80 +26,78 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ── Build the React app ─────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies and build
+        run: |
+          npm ci
+          npm run build
+
+      # ── Provision Azure infrastructure ──────────────────────────────────────
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # ── Resolve deployment variables ────────────────────────────────────────
       - name: Set deployment variables
         id: vars
         run: |
           ENV="${{ github.event.inputs.environment || 'prod' }}"
-          IMAGE_TAG="${{ github.sha }}"
-          # ACR names must be alphanumeric only
-          ACR_NAME="$(echo "${APP_NAME}${ENV}acr" | tr -d '-')"
+          echo "ENV=${ENV}"                                          >> "$GITHUB_OUTPUT"
+          echo "APP_SERVICE_NAME=${{ env.APP_NAME }}-${ENV}-ui"    >> "$GITHUB_OUTPUT"
 
-          echo "ENV=${ENV}"             >> "$GITHUB_OUTPUT"
-          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
-          echo "ACR_NAME=${ACR_NAME}"   >> "$GITHUB_OUTPUT"
-
-      # ── Provision Resource Group ─────────────────────────────────────────────
       - name: Create Resource Group
         run: |
           az group create \
-            --name "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --name     "${{ secrets.AZURE_RESOURCE_GROUP }}" \
             --location "${{ secrets.AZURE_LOCATION }}" \
             --output none
 
-      # ── Deploy ACR (idempotent) ──────────────────────────────────────────────
-      - name: Deploy Container Registry
+      - name: Deploy Azure infrastructure (Bicep)
         run: |
           az deployment group create \
             --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
-            --template-file infra/acr.bicep \
+            --template-file  infra/main.bicep \
             --parameters \
                 appName="${{ env.APP_NAME }}" \
                 environment="${{ steps.vars.outputs.ENV }}" \
-            --output none
-
-      # ── Build & push Docker image ────────────────────────────────────────────
-      - name: Login to ACR
-        run: az acr login --name "${{ steps.vars.outputs.ACR_NAME }}"
-
-      - name: Build and push image
-        run: |
-          ACR_SERVER="${{ steps.vars.outputs.ACR_NAME }}.azurecr.io"
-          IMAGE="${ACR_SERVER}/${{ env.APP_NAME }}-ui"
-          TAG="${{ steps.vars.outputs.IMAGE_TAG }}"
-
-          docker build -t "${IMAGE}:${TAG}" .
-          docker push "${IMAGE}:${TAG}"
-
-          # Keep 'latest' pointing to the most recent build
-          docker tag "${IMAGE}:${TAG}" "${IMAGE}:latest"
-          docker push "${IMAGE}:latest"
-
-      # ── Deploy Container Apps infrastructure ─────────────────────────────────
-      - name: Deploy Azure infrastructure
-        id: deploy
-        run: |
-          URL=$(az deployment group create \
-            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
-            --template-file infra/main.bicep \
-            --parameters \
-                appName="${{ env.APP_NAME }}" \
-                environment="${{ steps.vars.outputs.ENV }}" \
-                imageTag="${{ steps.vars.outputs.IMAGE_TAG }}" \
-                acrName="${{ steps.vars.outputs.ACR_NAME }}" \
                 userAdminUrl="${{ secrets.USER_ADMIN_URL }}" \
                 cbsMaintenanceUrl="${{ secrets.CBS_MAINTENANCE_URL }}" \
                 accountMasterUrl="${{ secrets.ACCOUNT_MASTER_URL }}" \
                 txnPostingUrl="${{ secrets.TXN_POSTING_URL }}" \
                 customerEntityUrl="${{ secrets.CUSTOMER_ENTITY_URL }}" \
-            --query "properties.outputs.containerAppUrl.value" \
-            --output tsv)
-          echo "app_url=${URL}" >> "$GITHUB_OUTPUT"
+            --output none
+
+      # ── Package and deploy ──────────────────────────────────────────────────
+      - name: Create deployment package
+        run: |
+          mkdir -p deployment
+          # Copy the React build output and the Node server
+          cp -r dist      deployment/
+          cp server.js    deployment/
+          cp package.json deployment/
+          cp package-lock.json deployment/
+          # Install only production dependencies inside the package
+          cd deployment && npm ci --omit=dev
+          # Zip from inside so files sit at the archive root (not under deployment/)
+          zip -r ../app.zip .
+
+      - name: Deploy to App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ steps.vars.outputs.APP_SERVICE_NAME }}
+          package: app.zip
 
       - name: Print deployment URL
-        run: echo "Deployed to ${{ steps.deploy.outputs.app_url }}"
+        run: |
+          URL=$(az webapp show \
+            --name            "${{ steps.vars.outputs.APP_SERVICE_NAME }}" \
+            --resource-group  "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --query           "defaultHostName" \
+            --output tsv)
+          echo "Deployed to: https://$URL"
